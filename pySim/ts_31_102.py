@@ -264,3 +264,84 @@ EF_USIM_ADF_map = {
 	'ePDGIdEm': '6FF5',
 	'ePDGSelectionEm': '6FF6',
 }
+
+######################################################################
+# ADF.USIM
+######################################################################
+
+from pySim.filesystem import *
+from pySim.ts_51_011 import EF_IMSI, EF_xPLMNwAcT, EF_SPN, EF_CBMI, EF_ACC, EF_PLMNsel, EF_AD
+from pySim.ts_51_011 import EF_CBMID, EF_ECC, EF_CBMIR
+
+import pySim.ts_102_221
+
+class EF_LI(TransRecEF):
+    def __init__(self, fid='6f05', sfid=None, name='EF.LI', size={2,None}, rec_len=2,
+                 desc='Language Indication'):
+        super().__init__(fid, sfid=sfid, name=name, desc=desc, size=size, rec_len=rec_len)
+
+class ADF_USIM(CardADF):
+    def __init__(self, aid='a0000000871002', name='ADF.USIM', fid=None, sfid=None,
+                 desc='USIM Application'):
+        super().__init__(aid=aid, fid=fid, sfid=sfid, name=name, desc=desc)
+        self.shell_commands = [self.ShellCommands()]
+
+        files = [
+          EF_LI(sfid=0x02),
+          EF_IMSI(sfid=0x07),
+          TransparentEF('6f08', 0x08, 'EF.Keys', size={33,33}, desc='Ciphering and Integrity Keys'),
+          TransparentEF('6f09', 0x09, 'EF.KeysPS', size={33,33},
+                        desc='Ciphering and Integrity Keys for PS domain'),
+          EF_xPLMNwAcT('6f60', 0x0a, 'EF.PLMNwAcT',
+                       'User controlled PLMN Selector with Access Technology'),
+          TransparentEF('6f31', 0x12, 'EF.HPPLMN', 'Higher Priprity PLMN search period'),
+          # EF.ACMmax
+          # EF.UST
+          # EF.ACM
+          CyclicEF('6f39', None, 'EF.ACM', 'Accumulated call meter', rec_len={3,3}),
+          TransparentEF('6f3e', None, 'EF.GID1', 'Group Identifier Level 1'),
+          TransparentEF('6f3f', None, 'EF.GID2', 'Group Identifier Level 2'),
+          EF_SPN(),
+          TransparentEF('6f41', None, 'EF.PUCT', 'Price per unit and currency table', size={5,5}),
+          EF_CBMI(),
+          EF_ACC(sfid=0x06),
+          EF_PLMNsel('6f7b', 0x0d, 'EF.FPLMN', 'Forbidden PLMNs', size={12,None}),
+          TransparentEF('6f7e', 0x0b, 'EF.LOCI', 'Locationn information', size={11,11}),
+          EF_AD(sfid=0x03),
+          EF_CBMID(sfid=0x0e),
+          EF_ECC(sfid=0x01),
+          EF_CBMIR(),
+          ]
+        self.add_files(files)
+
+    def decode_select_response(self, data_hex):
+        return pySim.ts_102_221.decode_select_response(data_hex)
+
+
+
+    @with_default_category('File-Specific Commands')
+    class ShellCommands(CommandSet):
+        def __init__(self):
+            super().__init__()
+
+        def do_ust_service_activate(self, arg):
+            """Activate a service within EF.UST"""
+            self._cmd.card.update_ust(int(arg), 1)
+
+        def do_ust_service_deactivate(self, arg):
+            """Deactivate a service within EF.UST"""
+            self._cmd.card.update_ust(int(arg), 0)
+
+
+# TS 31.102 Section 7.3
+sw_usim = {
+    'Security management': {
+        '9862': 'Authentication error, incorrect MAC',
+        '9864': 'Authentication error, security context not supported',
+        '9865': 'Key freshness failure',
+        '9866': 'Authentication error, no memory space available',
+        '9867': 'Authentication error, no memory space available in EF MUK',
+    }
+}
+
+CardApplicationUSIM = CardApplication('USIM', adf=ADF_USIM(), sw=sw_usim)
