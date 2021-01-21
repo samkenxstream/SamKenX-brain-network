@@ -6,6 +6,7 @@
 
 #
 # Copyright (C) 2009-2010  Sylvain Munaut <tnt@246tNt.com>
+# Copyright (C) 2021 Harald Welte <laforge@osmocom.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -37,3 +38,12 @@ class ProtocolError(Exception):
 
 class ReaderError(Exception):
 	pass
+
+class SwMatchError(Exception):
+	"""Raised when an operation specifies an expected SW but the actual SW from
+	   the card doesn't match."""
+	def __init__(self, sw_actual, sw_expected):
+		self.sw_actual = sw_actual
+		self.sw_expected = sw_expected
+	def __str__(self):
+		return "Received %s but expected %s from card" % (self.sw_actual, self.sw_expected)

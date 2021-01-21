@@ -4,6 +4,8 @@
 """ pySim: PCSC reader transport link base
 """
 
+from pySim.exceptions import *
+
 #
 # Copyright (C) 2009-2010  Sylvain Munaut <tnt@246tNt.com>
 #
@@ -101,5 +103,5 @@ class LinkBase(object):
 				sw_masked = sw_masked + rv[1][i].lower()
 
 		if sw.lower() != sw_masked:
-			raise RuntimeError("SW match failed! Expected %s and got %s." % (sw.lower(), rv[1]))
+			raise SwMatchError(sw.lower(), rv[1])
 		return rv
