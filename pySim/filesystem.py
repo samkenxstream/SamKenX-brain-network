@@ -30,7 +30,6 @@ import json
 import cmd2
 from cmd2 import CommandSet, with_default_category, with_argparser
 import argparse
-import codecs
 
 from pySim.utils import sw_match, h2b, b2h
 from pySim.exceptions import *
@@ -329,7 +328,7 @@ class TransparentEF(CardEF):
         method = getattr(self, '_decode_hex', None)
         if callable(method):
             return method(raw_hex_data)
-        raw_bin_data = codecs.decode(raw_hex_data, 'hex')
+        raw_bin_data = h2b(raw_hex_data)
         method = getattr(self, '_decode_bin', None)
         if callable(method):
             return method(raw_bin_data)
@@ -353,7 +352,7 @@ class TransparentEF(CardEF):
         method = getattr(self, '_encode_bin', None)
         if callable(method):
             raw_bin_data = method(abstract_data)
-            return codecs.decode(raw_bin_data, 'hex')
+            return b2h(raw_bin_data)
         raise NotImplementedError
 
 
@@ -409,7 +408,7 @@ class LinFixedEF(CardEF):
         method = getattr(self, '_decode_record_hex', None)
         if callable(method):
             return method(raw_hex_data)
-        raw_bin_data = codecs.decode(raw_hex_data, 'hex')
+        raw_bin_data = h2b(raw_hex_data)
         method = getattr(self, '_decode_record_bin', None)
         if callable(method):
             return method(raw_bin_data)
@@ -420,7 +419,7 @@ class LinFixedEF(CardEF):
         method = getattr(self, '_decode_record_bin', None)
         if callable(method):
             return method(raw_bin_data)
-        raw_hex_data = codecs.encode(raw_bin_data, 'hex')
+        raw_hex_data = b2h(raw_bin_data)
         method = getattr(self, '_decode_record_hex', None)
         if callable(method):
             return method(raw_hex_data)
@@ -434,7 +433,7 @@ class LinFixedEF(CardEF):
         method = getattr(self, '_encode_record_bin', None)
         if callable(method):
             raw_bin_data = method(abstract_data)
-            return codecs.decode(raw_bin_data, 'hex')
+            return b2h(raww_bin_data)
         raise NotImplementedError
 
     def encode_record_bin(self, abstract_data):
@@ -472,7 +471,7 @@ class TransRecEF(TransparentEF):
             return method(raw_hex_data)
         method = getattr(self, '_decode_record_bin', None)
         if callable(method):
-            raw_bin_data = codecs.decode(raw_hex_data, 'hex')
+            raw_bin_data = h2b(raw_hex_data)
             return method(raw_bin_data)
         return {'raw': raw_hex_data}
 
@@ -481,7 +480,7 @@ class TransRecEF(TransparentEF):
         method = getattr(self, '_decode_record_bin', None)
         if callable(method):
             return method(raw_bin_data)
-        raw_hex_data = codecs.encode(raw_bin_data, 'hex')
+        raw_hex_data = b2h(raw_bin_data)
         method = getattr(self, '_decode_record_hex', None)
         if callable(method):
             return method(raw_hex_data)
@@ -513,7 +512,7 @@ class TransRecEF(TransparentEF):
 
     def _encode_bin(self, abstract_data):
         chunks = [self.encode_record_bin(x) for x in abstract_data]
-# FIXME: pad to file size
+        # FIXME: pad to file size
         return b''.join(chunks)
 
 

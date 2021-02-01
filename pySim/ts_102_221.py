@@ -22,7 +22,6 @@ from struct import pack, unpack
 from pySim.utils import *
 from pySim.filesystem import *
 
-import codecs
 
 FCP_TLV_MAP = {
     '82': 'file_descriptor',
@@ -56,7 +55,7 @@ FCP_Proprietary_TLV_MAP = {
 
 # ETSI TS 102 221 11.1.1.4.3
 def interpret_file_descriptor(in_hex):
-    in_bin = codecs.decode(in_hex, 'hex')
+    in_bin = h2b(in_hex)
     out = {}
     ft_dict = {
         0: 'working_ef',
