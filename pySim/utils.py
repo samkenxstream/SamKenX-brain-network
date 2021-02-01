@@ -23,10 +23,12 @@
 
 
 def h2b(s):
-	return ''.join([chr((int(x,16)<<4)+int(y,16)) for x,y in zip(s[0::2], s[1::2])])
+    """convert from a string of hex nibbles to a sequence of bytes"""
+    return bytearray.fromhex(s)
 
-def b2h(s):
-	return ''.join(['%02x'%ord(x) for x in s])
+def b2h(b):
+    """convert from a sequence of bytes to a string of hex nibbles"""
+    return b.hex()
 
 def h2i(s):
 	return [(int(x,16)<<4)+int(y,16) for x,y in zip(s[0::2], s[1::2])]
@@ -335,7 +337,7 @@ def dec_msisdn(ef_msisdn):
 	msisdn_lhv = ef_msisdn[xlen:]
 
 	# Parse the length (in bytes) of the BCD encoded number
-	bcd_len = ord(msisdn_lhv[0])
+	bcd_len = msisdn_lhv[0]
 	# BCD length = length of dial num (max. 10 bytes) + 1 byte ToN and NPI
 	if bcd_len == 0xff:
 		return None
@@ -343,8 +345,8 @@ def dec_msisdn(ef_msisdn):
 		raise ValueError("Length of MSISDN (%d bytes) is out of range" % bcd_len)
 
 	# Parse ToN / NPI
-	ton = (ord(msisdn_lhv[1]) >> 4) & 0x07
-	npi = ord(msisdn_lhv[1]) & 0x0f
+	ton = (msisdn_lhv[1] >> 4) & 0x07
+	npi = msisdn_lhv[1] & 0x0f
 	bcd_len -= 1
 
 	# No MSISDN?
