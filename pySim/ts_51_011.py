@@ -332,10 +332,10 @@ EF_AD_mode_map = {
 
 
 from pySim.utils import *
-from pySim.ts_51_011 import *
 from struct import pack, unpack
 
 from pySim.filesystem import *
+import pySim.ts_102_221
 
 ######################################################################
 # DF.TELECOM
@@ -378,6 +378,8 @@ class DF_TELECOM(CardDF):
           ]
         self.add_files(files)
 
+    def decode_select_response(self, data_hex):
+        return decode_select_response(data_hex)
 
 ######################################################################
 # DF.GSM
@@ -388,6 +390,10 @@ class EF_LP(TransRecEF):
     def __init__(self, fid='6f05', sfid=None, name='EF.LP', size={1,None}, rec_len=1,
                  desc='Language Preference'):
         super().__init__(fid, sfid=sfid, name=name, desc=desc, size=size, rec_len=rec_len)
+    def _decode_record_bin(self, in_bin):
+        return b2h(in_bin)
+    def _encode_record_bin(self, in_json):
+        return h2b(in_json)
 
 # TS 51.011 Section 10.3.2
 class EF_IMSI(TransparentEF):
@@ -403,6 +409,16 @@ class EF_PLMNsel(TransRecEF):
     def __init__(self, fid='6f30', sfid=None, name='EF.PLMNsel', desc='PLMN selector',
                  size={24,None}, rec_len=3):
         super().__init__(fid, name=name, sfid=sfid, desc=desc, size=size, rec_len=rec_len)
+    def _decode_record_hex(self, in_hex):
+        if in_hex[:6] == "ffffff":
+            return None
+        else:
+            return dec_plmn(in_hex)
+    def _encode_record_hex(self, in_json):
+        if in_json == None:
+            return "ffffff"
+        else:
+            return enc_plmn(in_json['mcc'], in_json['mnc'])
 
 # TS 51.011 Section 10.3.7
 class EF_ServiceTable(TransparentEF):
@@ -410,17 +426,19 @@ class EF_ServiceTable(TransparentEF):
         super().__init__(fid, sfid=sfid, name=name, desc=desc, size=size)
         self.table = table
     def _decode_bin(self, raw_bin):
-        ret = []
+        ret = {}
         for i in range(0, len(raw_bin)*4):
             service_nr = i+1
-            byte = int(raw_bin[i/4])
+            byte = int(raw_bin[i//4])
             bit_offset = (i % 4) * 2
             bits = (byte >> bit_offset) & 3
-            ret.add({'number': service_nr,
-                     'description': table[service_nr] or None,
-                     'allocated': bits & 1,
-                     'activated': bits & 2,
-                     })
+            ret[service_nr] = {
+                     'description': self.table[service_nr] or None,
+                     'allocated': True if bits & 1 else False,
+                     'activated': True if bits & 2 else False,
+                     }
+        return ret
+    # TODO: encoder
 
 # TS 51.011 Section 10.3.11
 class EF_SPN(TransparentEF):
@@ -483,6 +501,48 @@ class EF_CBMIR(TransRecEF):
 class EF_xPLMNwAcT(TransRecEF):
     def __init__(self, fid, sfid=None, name=None, desc=None, size={40,None}, rec_len=5):
         super().__init__(fid, sfid=sfid, name=name, desc=desc, size=size, rec_len=rec_len)
+    def _decode_record_hex(self, in_hex):
+        if in_hex[:6] == "ffffff":
+            return None
+        else:
+            return dec_xplmn_w_act(in_hex)
+    def _encode_record_hex(self, in_json):
+        if in_json == None:
+            return "ffffff0000"
+        else:
+            hplmn = enc_plmn(in_json['mcc'], in_json['mnc'])
+            act = self.enc_act(in_json['act'])
+            return hplmn + act
+    @staticmethod
+    def enc_act(in_list):
+        u16 = 0
+        # first the simple ones
+        if 'UTRAN' in in_list:
+            u16 |= 0x8000
+        if 'NG-RAN' in in_list:
+            u16 |= 0x0800
+        if 'GSM COMPACT' in in_list:
+            u16 |= 0x0040
+        if 'cdma2000 HRPD' in in_list:
+            u16 |= 0x0020
+        if 'cdma2000 1xRTT' in in_list:
+            u16 |= 0x0010
+        # E-UTRAN
+        if 'E-UTRAN WB-S1' and 'E-UTRAN NB-S1' in in_list:
+            u16 |= 0x7000   # WB-S1 and NB-S1
+        elif 'E-UTRAN NB-S1' in in_list:
+            u16 |= 0x6000   # only WB-S1
+        elif 'E-UTRAN NB-S1' in in_list:
+            u16 |= 0x5000   # only NB-S1
+        # GSM mess
+        if 'GSM' in in_list and 'EC-GSM-IoT' in in_list:
+            u16 |= 0x008C
+        elif 'GSM' in in_list:
+            u16 |= 0x0084
+        elif 'EC-GSM-IuT' in in_list:
+            u16 |= 0x0088
+        return '%04X'%(u16)
+
 
 class DF_GSM(CardDF):
     def __init__(self, fid='7f20', name='DF.GSM', desc='GSM Network related files'):
@@ -521,5 +581,49 @@ class DF_GSM(CardDF):
           # MMSICP, MMSUP, MMSUCP
           ]
         self.add_files(files)
+
+    def decode_select_response(self, data_hex):
+        return decode_select_response(data_hex)
+
+def decode_select_response(resp_hex):
+    resp_bin = h2b(resp_hex)
+    if resp_bin[0] == 0x62:
+        return pySim.ts_102_221.decode_select_response(resp_hex)
+    struct_of_file_map = {
+        0: 'transparent',
+        1: 'linear_fixed',
+        3: 'cyclic'
+        }
+    type_of_file_map = {
+        1: 'mf',
+        2: 'df',
+        4: 'working_ef'
+        }
+    ret = {
+        'file_descriptor': {},
+        'proprietary_info': {},
+        }
+    ret['file_id'] = b2h(resp_bin[4:6])
+    ret['proprietary_info']['available_memory'] = int.from_bytes(resp_bin[2:4], 'big')
+    file_type = type_of_file_map[resp_bin[6]] if resp_bin[6] in type_of_file_map else resp_bin[6]
+    ret['file_descriptor']['file_type'] = file_type
+    if file_type in ['mf', 'df']:
+        ret['file_characteristics'] = b2h(resp_bin[13])
+        ret['num_direct_child_df'] = int(resp_bin[14], 16)
+        ret['num_direct_child_ef'] = int(resp_bin[15], 16)
+        ret['num_chv_unbkock_adm_codes'] = int(resp_bin[16])
+        # CHV / UNBLOCK CHV stats
+    elif file_type in ['working_ef']:
+        file_struct = struct_of_file_map[resp_bin[13]] if resp_bin[13] in struct_of_file_map else resp_bin[13]
+        ret['file_descriptor']['structure'] = file_struct
+        ret['access_conditions'] = b2h(resp_bin[8:10])
+        if resp_bin[11] & 0x01 == 0:
+            ret['life_cycle_status_int'] = 'operational_activated'
+        elif resp_bin[11] & 0x04:
+            ret['life_cycle_status_int'] = 'operational_deactivated'
+        else:
+            ret['life_cycle_status_int'] = 'terminated'
+
+    return ret
 
 CardProfileSIM = CardProfile('SIM', desc='GSM SIM Card', files_in_mf=[DF_TELECOM(), DF_GSM()])

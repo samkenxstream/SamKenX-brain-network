@@ -305,7 +305,8 @@ class TransparentEF(CardEF):
         @cmd2.with_argparser(upd_bin_dec_parser)
         def do_update_binary_decoded(self, opts):
             """Encode + Update (Write) data of a transparent EF"""
-            (data, sw) = self._cmd.rs.update_binary_dec(opts.data)
+            data_json = json.loads(opts.data)
+            (data, sw) = self._cmd.rs.update_binary_dec(data_json)
             self._cmd.poutput(json.dumps(data, indent=4))
 
     def __init__(self, fid, sfid=None, name=None, desc=None, parent=None, size={1,None}):
@@ -594,7 +595,9 @@ class RuntimeState(object):
 
     def read_binary_dec(self):
         (data, sw) = self.read_binary()
-        return (self.selected_file.decode_hex(data), sw)
+        dec_data = self.selected_file.decode_hex(data)
+        print("%s: %s -> %s" % (sw, data, dec_data))
+        return (dec_data, sw)
 
     def update_binary(self, data_hex, offset=0):
         if not isinstance(self.selected_file, TransparentEF):
@@ -602,7 +605,8 @@ class RuntimeState(object):
         return self.card._scc.update_binary(self.selected_file.fid, data_hex, offset)
 
     def update_binary_dec(self, data):
-        hex_data = self.selected_file.encode_hex(data)
+        data_hex = self.selected_file.encode_hex(data)
+        print("%s -> %s" % (data, data_hex))
         return self.update_binary(data_hex)
 
     def read_record(self, rec_nr=0):

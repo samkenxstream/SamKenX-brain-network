@@ -279,6 +279,68 @@ class EF_LI(TransRecEF):
     def __init__(self, fid='6f05', sfid=None, name='EF.LI', size={2,None}, rec_len=2,
                  desc='Language Indication'):
         super().__init__(fid, sfid=sfid, name=name, desc=desc, size=size, rec_len=rec_len)
+    def _decode_record_bin(self, in_bin):
+        if in_bin == b'\xff\xff':
+            return None
+        else:
+            # officially this is 7-bit GSM alphabet with one padding bit in each byte
+            return in_bin.decode('ascii')
+    def _encode_record_bin(self, in_json):
+        if in_json == None:
+            return b'\xff\xff'
+        else:
+            # officially this is 7-bit GSM alphabet with one padding bit in each byte
+            return in_json.encode('ascii')
+
+class EF_Keys(TransparentEF):
+    def __init__(self, fid='6f08', sfid=0x08, name='EF.Keys', size={33,33},
+                 desc='Ciphering and Integrity Keys'):
+        super().__init__(fid, sfid=sfid, name=name, desc=desc, size=size)
+    def _decode_bin(self, in_bin):
+        return {'ksi': in_bin[0],
+                'ck': b2h(in_bin[1:17]),
+                'ik': b2h(in_bin[17:33])}
+    def _encode_bin(self, in_json):
+        return h2b(in_json['ksi']) + h2b(in_json['ck']) + h2b(in_json['ik'])
+
+# TS 31.103 Section 4.2.7
+class EF_UST(TransparentEF):
+    def __init__(self, fid='6f38', sfid=0x04, name='EF.UST', desc='USIM Service Table'):
+        super().__init__(fid=fid, sfid=sfid, name=name, desc=desc, size={1,17})
+        # add those commands to the general commands of a TransparentEF
+        self.shell_commands += [self.AddlShellCommands()]
+    def _decode_bin(self, in_bin):
+        ret = []
+        for i in range (0, len(in_bin)):
+            byte = in_bin[i]
+            for bitno in range(0,7):
+                if byte & (1 << bitno):
+                    ret.append(i * 8 + bitno + 1)
+        return ret
+    def _encode_bin(self, in_json):
+        # FIXME: size this to length of file
+        ret = bytearray(20)
+        for srv in in_json:
+            print("srv=%d"%srv)
+            srv = srv-1
+            byte_nr = srv // 8
+            # FIXME: detect if service out of range was selected
+            bit_nr = srv % 8
+            ret[byte_nr] |= (1 << bit_nr)
+        return ret
+    @with_default_category('File-Specific Commands')
+    class AddlShellCommands(CommandSet):
+        def __init__(self):
+            super().__init__()
+
+        def do_ust_service_activate(self, arg):
+            """Activate a service within EF.UST"""
+            self._cmd.card.update_ust(int(arg), 1)
+
+        def do_ust_service_deactivate(self, arg):
+            """Deactivate a service within EF.UST"""
+            self._cmd.card.update_ust(int(arg), 0)
+
 
 class ADF_USIM(CardADF):
     def __init__(self, aid='a0000000871002', name='ADF.USIM', fid=None, sfid=None,
@@ -289,15 +351,13 @@ class ADF_USIM(CardADF):
         files = [
           EF_LI(sfid=0x02),
           EF_IMSI(sfid=0x07),
-          TransparentEF('6f08', 0x08, 'EF.Keys', size={33,33}, desc='Ciphering and Integrity Keys'),
-          TransparentEF('6f09', 0x09, 'EF.KeysPS', size={33,33},
-                        desc='Ciphering and Integrity Keys for PS domain'),
+          EF_Keys(),
+          EF_Keys('6f09', 0x09, 'EF.KeysPS', desc='Ciphering and Integrity Keys for PS domain'),
           EF_xPLMNwAcT('6f60', 0x0a, 'EF.PLMNwAcT',
                        'User controlled PLMN Selector with Access Technology'),
           TransparentEF('6f31', 0x12, 'EF.HPPLMN', 'Higher Priprity PLMN search period'),
           # EF.ACMmax
-          # EF.UST
-          # EF.ACM
+          EF_UST(),
           CyclicEF('6f39', None, 'EF.ACM', 'Accumulated call meter', rec_len={3,3}),
           TransparentEF('6f3e', None, 'EF.GID1', 'Group Identifier Level 1'),
           TransparentEF('6f3f', None, 'EF.GID2', 'Group Identifier Level 2'),
@@ -317,20 +377,10 @@ class ADF_USIM(CardADF):
     def decode_select_response(self, data_hex):
         return pySim.ts_102_221.decode_select_response(data_hex)
 
-
-
     @with_default_category('File-Specific Commands')
     class ShellCommands(CommandSet):
         def __init__(self):
             super().__init__()
-
-        def do_ust_service_activate(self, arg):
-            """Activate a service within EF.UST"""
-            self._cmd.card.update_ust(int(arg), 1)
-
-        def do_ust_service_deactivate(self, arg):
-            """Deactivate a service within EF.UST"""
-            self._cmd.card.update_ust(int(arg), 0)
 
 
 # TS 31.102 Section 7.3

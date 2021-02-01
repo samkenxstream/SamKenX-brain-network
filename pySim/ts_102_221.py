@@ -75,8 +75,8 @@ def interpret_file_descriptor(in_hex):
     out['file_type'] = ft_dict[ftype] if ftype in ft_dict else ftype
     out['structure'] = fs_dict[fstruct] if fstruct in fs_dict else fstruct
     if len(in_bin) >= 5:
-        out['record_len'] = int(in_bin[3:2], 16)
-        out['num_of_rec'] = int(in_bin[5:1], 16)
+        out['record_len'] = int.from_bytes(in_bin[3:2], 'big')
+        out['num_of_rec'] = int.from_bytes(in_bin[5:1], 'big')
     return out
 
 # ETSI TS 102 221 11.1.1.4.9

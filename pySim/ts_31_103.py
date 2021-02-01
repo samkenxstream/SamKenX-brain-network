@@ -24,6 +24,7 @@ Various constants from ETSI TS 131 103 V14.2.0
 #
 
 from pySim.filesystem import *
+from pySim.utils import *
 from pySim.ts_51_011 import EF_AD
 import pySim.ts_102_221
 
@@ -117,6 +118,11 @@ class EF_IST(TransparentEF):
 class EF_PCSCF(LinFixedEF):
     def __init__(self, fid='6f09', sfid=None, name='EF.P-CSCF', desc='P-CSCF Address'):
         super().__init__(fid=fid, sfid=sfid, name=name, desc=desc)
+    def _decode_record_hex(self, raw_hex):
+        # FIXME: this doesn't do JSON output
+        return dec_addr_tlv(raw_hex)
+    def _encode_record_hex(self, json_in):
+        return enc_addr_tlv(json_in)
 
 # TS 31.103 Section 4.2.9
 class EF_GBABP(LinFixedEF):
