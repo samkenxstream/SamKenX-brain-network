@@ -97,10 +97,11 @@ class EF_ARR(LinFixedEF):
 class EF_IST(TransparentEF):
     def __init__(self, fid='6f07', sfid=0x07, name='EF.IST', desc='ISIM Service Table'):
         super().__init__(fid=fid, sfid=sfid, name=name, desc=desc, size={1,4})
-        self.shell_commands = [self.ShellCommands()]
+        # add those commands to the general commands of a TransparentEF
+        self.shell_commands += [self.AddlShellCommands()]
 
     @with_default_category('File-Specific Commands')
-    class ShellCommands(CommandSet):
+    class AddlShellCommands(CommandSet):
         def __init__(self):
             super().__init__()
 
@@ -157,7 +158,6 @@ class ADF_ISIM(CardADF):
     def __init__(self, aid='a0000000871004', name='ADF.ISIM', fid=None, sfid=None,
                  desc='ISIM Application'):
         super().__init__(aid=aid, fid=fid, sfid=sfid, name=name, desc=desc)
-        #self.shell_commands += [self.ShellCommands()]
 
         files = [
             EF_IMPI(),

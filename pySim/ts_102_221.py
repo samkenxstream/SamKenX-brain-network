@@ -22,37 +22,108 @@ from struct import pack, unpack
 from pySim.utils import *
 from pySim.filesystem import *
 
+import codecs
+
 FCP_TLV_MAP = {
-        '82': 'file_descriptor',
-        '83': 'file_identifier',
-        '84': 'df_name',
-        'A5': 'proprietary_info',
-        '8A': 'life_cycle_status_int',
-        '8B': 'security_attrib_ref_expanded',
-        '8C': 'security_attrib_compact',
-        'AB': 'security_attrib_espanded',
-        'C6': 'pin_status_template_do',
-        '80': 'file_size',
-        '81': 'total_file_size',
-        '88': 'short_file_id',
-        }
+    '82': 'file_descriptor',
+    '83': 'file_identifier',
+    '84': 'df_name',
+    'A5': 'proprietary_info',
+    '8A': 'life_cycle_status_int',
+    '8B': 'security_attrib_ref_expanded',
+    '8C': 'security_attrib_compact',
+    'AB': 'security_attrib_espanded',
+    'C6': 'pin_status_template_do',
+    '80': 'file_size',
+    '81': 'total_file_size',
+    '88': 'short_file_id',
+    }
 
 # ETSI TS 102 221 11.1.1.4.6
 FCP_Proprietary_TLV_MAP = {
-        '80': 'uicc_characteristics',
-        '81': 'application_power_consumption',
-        '82': 'minimum_app_clock_freq',
-        '83': 'available_memory',
-        '84': 'file_details',
-        '85': 'reserved_file_size',
-        '86': 'maximum_file_size',
-        '87': 'suported_system_commands',
-        '88': 'specific_uicc_env_cond',
-        '89': 'p2p_cat_secured_apdu',
-        # Additional private TLV objects (bits b7 and b8 of the first byte of the tag set to '1')
-        }
+    '80': 'uicc_characteristics',
+    '81': 'application_power_consumption',
+    '82': 'minimum_app_clock_freq',
+    '83': 'available_memory',
+    '84': 'file_details',
+    '85': 'reserved_file_size',
+    '86': 'maximum_file_size',
+    '87': 'suported_system_commands',
+    '88': 'specific_uicc_env_cond',
+    '89': 'p2p_cat_secured_apdu',
+    # Additional private TLV objects (bits b7 and b8 of the first byte of the tag set to '1')
+    }
 
-# pytlv unfortunately doens't have a setting using which we can make it
+# ETSI TS 102 221 11.1.1.4.3
+def interpret_file_descriptor(in_hex):
+    in_bin = codecs.decode(in_hex, 'hex')
+    out = {}
+    ft_dict = {
+        0: 'working_ef',
+        1: 'internal_ef',
+        7: 'df'
+    }
+    fs_dict = {
+        0: 'no_info_given',
+        1: 'transparent',
+        2: 'linear_fixed',
+        6: 'cyclic',
+    }
+    fdb = in_bin[0]
+    ftype = (fdb >> 3) & 7
+    fstruct = fdb & 7
+    out['shareable'] = True if fdb & 0x40 else False
+    out['file_type'] = ft_dict[ftype] if ftype in ft_dict else ftype
+    out['structure'] = fs_dict[fstruct] if fstruct in fs_dict else fstruct
+    if len(in_bin) >= 5:
+        out['record_len'] = int(in_bin[3:2], 16)
+        out['num_of_rec'] = int(in_bin[5:1], 16)
+    return out
+
+# ETSI TS 102 221 11.1.1.4.9
+def interpret_life_cycle_sts_int(in_hex):
+    lcsi = int(in_hex, 16)
+    if lcsi == 0x00:
+        return 'no_information'
+    elif lcsi == 0x01:
+        return 'creation'
+    elif lcsi == 0x03:
+        return 'initialization'
+    elif lcsi & 0x05 == 0x05:
+        return 'operational_activated'
+    elif lcsi & 0x05 == 0x04:
+        return 'operational_deactivated'
+    elif lcsi & 0xc0 == 0xc0:
+        return 'termination'
+    else:
+        return in_hex
+
+# ETSI TS 102 221 11.1.1.4.10
+FCP_Pin_Status_TLV_MAP = {
+    '90': 'ps_do',
+    '95': 'usage_qualifier',
+    '83': 'key_reference',
+    }
+
+def interpret_ps_templ_do(in_hex):
+    # cannot use the 'TLV' parser due to repeating tags
+    #psdo_tlv = TLV(FCP_Pin_Status_TLV_MAP)
+    #return psdo_tlv.parse(in_hex)
+    return in_hex
+
+# 'interpreter' functions for each tag
+FCP_interpreter_map = {
+    '80': lambda x: int(x, 16),
+    '82': interpret_file_descriptor,
+    '8A': interpret_life_cycle_sts_int,
+    'C6': interpret_ps_templ_do,
+    }
+
+FCP_prorietary_interpreter_map = {
+    '83': lambda x: int(x, 16),
+    }
+
+# pytlv unfortunately doesn't have a setting using which we can make it
 # accept unknown tags.  It also doesn't raise a specific exception type but
 # just the generic ValueError, so we cannot ignore those either.  Instead,
 # we insert a dict entry for every possible proprietary tag permitted
@@ -64,12 +135,6 @@ def fixup_fcp_proprietary_tlv_map(tlv_map):
         tlv_map[i_hex] = 'proprietary_' + i_hex
 
 
-# ETSI TS 102 221 11.1.1.4.10
-FCP_Pin_Status_TLV_MAP = {
-        '95': 'usage_qualifier',
-        '83': 'key_reference',
-        }
-
 def tlv_key_replace(inmap, indata):
     def newkey(inmap, key):
         if key in inmap:
@@ -78,6 +143,13 @@ def tlv_key_replace(inmap, indata):
             return key
     return {newkey(inmap, d[0]): d[1] for d in indata.items()}
 
+def tlv_val_interpret(inmap, indata):
+    def newval(inmap, key, val):
+        if key in inmap:
+            return inmap[key](val)
+        else:
+            return val
+    return {d[0]: newval(inmap, d[0], d[1]) for d in indata.items()}
 
 
 # ETSI TS 102 221 Section 11.1.1.3
@@ -94,9 +166,11 @@ def decode_select_response(resp_hex):
     if fcp['A5']:
         prop_tlv = TLV(FCP_Proprietary_TLV_MAP)
         prop = prop_tlv.parse(fcp['A5'])
-        fcp['A5'] = tlv_key_replace(FCP_Proprietary_TLV_MAP, prop)
+        fcp['A5'] = tlv_val_interpret(FCP_prorietary_interpreter_map, prop)
+        fcp['A5'] = tlv_key_replace(FCP_Proprietary_TLV_MAP, fcp['A5'])
     # finally make sure we get human-readable keys in the output dict
-    return tlv_key_replace(FCP_TLV_MAP, fcp)
+    r = tlv_val_interpret(FCP_interpreter_map, fcp)
+    return tlv_key_replace(FCP_TLV_MAP, r)
 
 
 # TS 102 221 Section 13.1

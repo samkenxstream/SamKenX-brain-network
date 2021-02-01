@@ -30,6 +30,7 @@ import json
 import cmd2
 from cmd2 import CommandSet, with_default_category, with_argparser
 import argparse
+import codecs
 
 from pySim.utils import sw_match, h2b, b2h
 from pySim.exceptions import *
@@ -106,6 +107,7 @@ class CardFile(object):
         # if we have a MF, we can always select its applications
         mf = self.get_mf()
         if mf:
+            sels |= mf._get_self_selectables()
             sels |= mf.get_app_selectables()
         return sels
 
@@ -262,7 +264,7 @@ class CardEF(CardFile):
 
     def get_selectables(self):
         """Get list of completions (EF names) from current DF"""
-#global selectable names + those of the parent DF
+        #global selectable names + those of the parent DF
         sels = super().get_selectables()
         sels |= {x.name:x for x in self.parent.children.values() if x != self}
         return sels
@@ -302,7 +304,7 @@ class TransparentEF(CardEF):
         upd_bin_dec_parser = argparse.ArgumentParser()
         upd_bin_dec_parser.add_argument('data', help='Abstract data (JSON format) to write')
         @cmd2.with_argparser(upd_bin_dec_parser)
-        def do_update_binary_dec(self, opts):
+        def do_update_binary_decoded(self, opts):
             """Encode + Update (Write) data of a transparent EF"""
             (data, sw) = self._cmd.rs.update_binary_dec(opts.data)
             self._cmd.poutput(json.dumps(data, indent=4))
@@ -320,18 +322,18 @@ class TransparentEF(CardEF):
         method = getattr(self, '_decode_hex', None)
         if callable(method):
             return method(b2h(raw_bin_data))
-        return {'raw': raw_bin_data}
+        return {'raw': raw_bin_data.hex()}
 
     def decode_hex(self, raw_hex_data):
         """Decode raw (hex string) data into abstract representation. Overloaded by specific classes."""
         method = getattr(self, '_decode_hex', None)
         if callable(method):
             return method(raw_hex_data)
-        raw_bin_data = bytes(h2b(raw_hex_data), encoding='utf8')
+        raw_bin_data = codecs.decode(raw_hex_data, 'hex')
         method = getattr(self, '_decode_bin', None)
         if callable(method):
             return method(raw_bin_data)
-        return {'raw': raw_bin_data}
+        return {'raw': raw_bin_data.hex()}
 
     def encode_bin(self, abstract_data):
         """Encode abstract representation into raw (binary) data. Overloaded by specific classes."""
@@ -350,7 +352,8 @@ class TransparentEF(CardEF):
             return method(abstract_data)
         method = getattr(self, '_encode_bin', None)
         if callable(method):
-            return b2h(method(abstract_data))
+            raw_bin_data = method(abstract_data)
+            return codecs.decode(raw_bin_data, 'hex')
         raise NotImplementedError
 
 
@@ -363,22 +366,23 @@ class LinFixedEF(CardEF):
             super().__init__()
 
         read_rec_parser = argparse.ArgumentParser()
-        read_rec_parser.add_argument('--record-nr', type=int, default=0, help='Number of record to read')
-
+        read_rec_parser.add_argument('record_nr', type=int, help='Number of record to be read')
         @cmd2.with_argparser(read_rec_parser)
         def do_read_record(self, opts):
             """Read a record from a record-oriented EF"""
             (data, sw) = self._cmd.rs.read_record(opts.record_nr)
-            self._cmd.poutput(json.dumps(data, indent=4))
+            self._cmd.poutput(data)
 
-        @cmd2.with_argparser(read_rec_parser)
+        read_rec_dec_parser = argparse.ArgumentParser()
+        read_rec_dec_parser.add_argument('record_nr', type=int, help='Number of record to be read')
+        @cmd2.with_argparser(read_rec_dec_parser)
         def do_read_record_decoded(self, opts):
             """Read + decode a record from a record-oriented EF"""
             (data, sw) = self._cmd.rs.read_record_dec(opts.record_nr)
             self._cmd.poutput(json.dumps(data, indent=4))
 
         upd_rec_parser = argparse.ArgumentParser()
-        upd_rec_parser.add_argument('--record-nr', type=int, default=0, help='Number of record to read')
+        upd_rec_parser.add_argument('record_nr', type=int, help='Number of record to be read')
         upd_rec_parser.add_argument('data', help='Data bytes (hex format) to write')
         @cmd2.with_argparser(upd_rec_parser)
         def do_update_record(self, opts):
@@ -386,7 +390,10 @@ class LinFixedEF(CardEF):
             (data, sw) = self._cmd.rs.update_record(opts.record_nr, opts.data)
             self._cmd.poutput(data)
 
-        @cmd2.with_argparser(upd_rec_parser)
+        upd_rec_dec_parser = argparse.ArgumentParser()
+        upd_rec_dec_parser.add_argument('record_nr', type=int, help='Number of record to be read')
+        upd_rec_dec_parser.add_argument('data', help='Data bytes (hex format) to write')
+        @cmd2.with_argparser(upd_rec_dec_parser)
         def do_update_record_decoded(self, opts):
             """Encode + Update (write) data to a record-oriented EF"""
             (data, sw) = self._cmd.rs.update_record_dec(opts.record_nr, opts.data)
@@ -402,21 +409,22 @@ class LinFixedEF(CardEF):
         method = getattr(self, '_decode_record_hex', None)
         if callable(method):
             return method(raw_hex_data)
-        raw_bin_data = bytes(h2b(raw_hex_data), encoding='utf8')
+        raw_bin_data = codecs.decode(raw_hex_data, 'hex')
         method = getattr(self, '_decode_record_bin', None)
         if callable(method):
             return method(raw_bin_data)
-        return {'raw': raw_bin_data}
+        return {'raw': raw_bin_data.hex()}
 
     def decode_record_bin(self, raw_bin_data):
-        """Decode raw (hex string) data into abstract representation. Overloaded by specific classes."""
+        """Decode raw (binary) data into abstract representation. Overloaded by specific classes."""
         method = getattr(self, '_decode_record_bin', None)
         if callable(method):
             return method(raw_bin_data)
+        raw_hex_data = codecs.encode(raw_bin_data, 'hex')
         method = getattr(self, '_decode_record_hex', None)
         if callable(method):
-            return method(b2h(raw_bin_data))
-        return {'raw': raw_bin_data}
+            return method(raw_hex_data)
+        return {'raw': raw_hex_data}
 
     def encode_record_hex(self, abstract_data):
         """Encode abstract representation into raw (hex string) data. Overloaded by specific classes."""
@@ -425,7 +433,8 @@ class LinFixedEF(CardEF):
             return method(abstract_data)
         method = getattr(self, '_encode_record_bin', None)
         if callable(method):
-            return b2h(method(abstract_data))
+            raw_bin_data = method(abstract_data)
+            return codecs.decode(raw_bin_data, 'hex')
         raise NotImplementedError
 
     def encode_record_bin(self, abstract_data):
@@ -463,18 +472,20 @@ class TransRecEF(TransparentEF):
             return method(raw_hex_data)
         method = getattr(self, '_decode_record_bin', None)
         if callable(method):
-            return method(h2b(raw_hex_data))
-        return {'raw': h2b(raw_hex_data)}
+            raw_bin_data = codecs.decode(raw_hex_data, 'hex')
+            return method(raw_bin_data)
+        return {'raw': raw_hex_data}
 
     def decode_record_bin(self, raw_bin_data):
         """Decode raw (hex string) data into abstract representation. Overloaded by specific classes."""
         method = getattr(self, '_decode_record_bin', None)
         if callable(method):
             return method(raw_bin_data)
+        raw_hex_data = codecs.encode(raw_bin_data, 'hex')
         method = getattr(self, '_decode_record_hex', None)
         if callable(method):
-            return method(b2h(raw_bin_data))
-        return {'raw': raw_bin_data}
+            return method(raw_hex_data)
+        return {'raw': raw_hex_data}
 
     def encode_record_hex(self, abstract_data):
         """Encode abstract representation into raw (hex string) data. Overloaded by specific classes."""
@@ -598,6 +609,7 @@ class RuntimeState(object):
     def read_record(self, rec_nr=0):
         if not isinstance(self.selected_file, LinFixedEF):
             raise TypeError("Only works with Linear Fixed EF")
+        # returns a string of hex nibbles
         return self.card._scc.read_record(self.selected_file.fid, rec_nr)
 
     def read_record_dec(self, rec_nr=0):

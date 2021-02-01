@@ -376,6 +376,7 @@ class DF_TELECOM(CardDF):
           EF_SMSP(),
           # SMSS, LND, SDN, EXT1, EXT2, EXT3, BDN, EXT4, SMSR, CMI
           ]
+        self.add_files(files)
 
 
 ######################################################################
