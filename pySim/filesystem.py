@@ -90,11 +90,11 @@ class CardFile(object):
         """Return a dict of {'identifier': self} tuples"""
         sels = {}
         if alias:
-            sels |= {alias: self}
+            sels.update({alias: self})
         if self.fid:
-            sels |= {self.fid: self}
+            sels.update({self.fid: self})
         if self.name:
-            sels |= {self.name: self}
+            sels.update({self.name: self})
         return sels
 
     def get_selectables(self):
@@ -106,8 +106,8 @@ class CardFile(object):
         # if we have a MF, we can always select its applications
         mf = self.get_mf()
         if mf:
-            sels |= mf._get_self_selectables()
-            sels |= mf.get_app_selectables()
+            sels.update(mf._get_self_selectables())
+            sels.update(mf.get_app_selectables())
         return sels
 
     def get_selectable_names(self):
@@ -162,8 +162,8 @@ class CardDF(CardFile):
         """Get selectable (DF/EF names) from current DF"""
         # global selectables + our children
         sels = super().get_selectables()
-        sels |= {x.fid: x for x in self.children.values() if x.fid}
-        sels |= {x.name: x for x in self.children.values() if x.name}
+        sels.update({x.fid: x for x in self.children.values() if x.fid})
+        sels.update({x.name: x for x in self.children.values() if x.name})
         return sels
 
     def lookup_file_by_name(self, name):
@@ -219,13 +219,13 @@ class CardMF(CardDF):
     def get_selectables(self):
         """Get list of completions (DF/EF/ADF names) from current DF"""
         sels = super().get_selectables()
-        sels |= self.get_app_selectables()
+        sels.update(self.get_app_selectables())
         return sels
 
     def get_app_selectables(self):
         # applications by AID + name
         sels = {x.aid: x for x in self.applications.values()}
-        sels |= {x.name: x for x in self.applications.values() if x.name}
+        sels.update({x.name: x for x in self.applications.values() if x.name})
         return sels
 
     def decode_select_response(self, data_hex):
@@ -265,7 +265,7 @@ class CardEF(CardFile):
         """Get list of completions (EF names) from current DF"""
         #global selectable names + those of the parent DF
         sels = super().get_selectables()
-        sels |= {x.name:x for x in self.parent.children.values() if x != self}
+        sels.update({x.name:x for x in self.parent.children.values() if x != self})
         return sels
 
 
