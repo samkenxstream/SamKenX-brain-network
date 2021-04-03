@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 
-""" pySim: card handler utilities
+""" pySim: card handler utilities.  A 'card handler' is some method
+by which cards can be inserted/removed into the card reader.  For
+normal smart card readers, this has to be done manually.  However,
+there are also automatic card feeders.
 """
 
 #
@@ -21,47 +24,76 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from pySim.transport import LinkBase
 
 import subprocess
 import sys
 import yaml
 
-# Manual card handler: User is prompted to insert/remove card from the reader.
-class card_handler:
+class CardHandler:
+	"""Abstract base class representing a mechanism for card insertion/removal."""
 
-	sl = None
-
-	def __init__(self, sl):
+	def __init__(self, sl:LinkBase):
 		self.sl = sl
 
-	def get(self, first = False):
-		print("Ready for Programming: Insert card now (or CTRL-C to cancel)")
-		self.sl.wait_for_card(newcardonly=not first)
+	def get(self, first:bool = False):
+		"""Method called when pySim needs a new card to be inserted.
+
+		Args:
+			first : FIXME
+		"""
+		print("Ready for Programming: ", end='')
+		self._get(first)
 
 	def error(self):
-		print("Programming failed: Remove card from reader")
-		print("")
+		"""Method called when pySim failed to program a card. Move card to 'bad' batch."""
+		print("Programming failed: ", end='')
+		self._error()
 
 	def done(self):
-		print("Programming successful: Remove card from reader")
+		"""Method called when pySim failed to program a card. Move card to 'good' batch."""
+		print("Programming successful: ", end='')
+		self._done()
+
+	def _get(self, first:bool = False):
+		pass
+
+	def _error(self):
+		pass
+
+	def _done(self):
+		pass
+
+
+class card_handler(CardHandler):
+	"""Manual card handler: User is prompted to insert/remove card from the reader."""
+
+	def _get(self, first:bool = False):
+		print("Insert card now (or CTRL-C to cancel)")
+		self.sl.wait_for_card(newcardonly=not first)
+
+	def _error(self):
+		print("Remove card from reader")
 		print("")
 
-# Automatic card handler: A machine is used to handle the cards.
-class card_handler_auto:
+	def _done(self):
+		print("Remove card from reader")
+		print("")
 
-	sl = None
-	cmds = None
+
+class card_handler_auto(CardHandler):
+	"""Automatic card handler: A machine is used to handle the cards."""
+
 	verbose = True
 
-	def __init__(self, sl, config_file):
+	def __init__(self, sl:LinkBase, config_file:str):
+		super().__init__(sl)
 		print("Card handler Config-file: " + str(config_file))
-		self.sl = sl
 		with open(config_file) as cfg:
 			self.cmds = yaml.load(cfg, Loader=yaml.FullLoader)
-
 		self.verbose = (self.cmds.get('verbose') == True)
 
-	def __print_outout(self,out):
+	def __print_outout(self, out):
 		print("")
 		print("Card handler output:")
 		print("---------------------8<---------------------")
@@ -91,17 +123,17 @@ class card_handler_auto:
 			print("Error: Card handler failure! (rc=" + str(rc) + ")")
 			sys.exit(rc)
 
-	def get(self, first = False):
-		print("Ready for Programming: Transporting card into the reader-bay...")
+	def _get(self, first:bool = False):
+		print("Transporting card into the reader-bay...")
 		self.__exec_cmd(self.cmds['get'])
 		self.sl.connect()
 
-	def error(self):
-		print("Programming failed: Transporting card to the error-bin...")
+	def _error(self):
+		print("Transporting card to the error-bin...")
 		self.__exec_cmd(self.cmds['error'])
 		print("")
 
-	def done(self):
-		print("Programming successful: Transporting card into the collector bin...")
+	def _done(self):
+		print("Transporting card into the collector bin...")
 		self.__exec_cmd(self.cmds['done'])
 		print("")
