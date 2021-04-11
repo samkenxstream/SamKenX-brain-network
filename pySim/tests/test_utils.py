@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import unittest
 from pySim import utils
 from pySim.ts_31_102 import EF_SUCI_Calc_Info
@@ -201,6 +199,3 @@ class TestComprTlv(unittest.TestCase):
         self.assertEqual(res, b'\x7f\x12\x34')
         res  = utils.comprehensiontlv_encode_tag({'tag': 0x1234, 'comprehension':True})
         self.assertEqual(res, b'\x7f\x92\x34')
-
-if __name__ == "__main__":
-	unittest.main()

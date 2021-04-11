@@ -24,9 +24,11 @@ pip install jsonpath-ng
 pip install construct
 pip install bidict
 pip install gsm0338
+pip install nose
 
 # Execute automatically discovered unit tests first
-python -m unittest discover -v -s tests/
+# - cannot use "python -m ./setup.py test" here as that somehow doesn't work in venv
+nosetests
 
 # Run pylint to find potential errors
 # Ignore E1102: not-callable

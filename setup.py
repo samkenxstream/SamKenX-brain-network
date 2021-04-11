@@ -22,5 +22,7 @@ setup(
         'pySim-prog.py',
         'pySim-read.py',
         'pySim-shell.py'
-    ]
+    ],
+    test_suite='nose.collector',
+    tests_require=['nose'],
 )
