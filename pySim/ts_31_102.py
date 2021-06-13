@@ -290,28 +290,29 @@ from pySim.ts_51_011 import EF_ACMmax, EF_AAeM, EF_eMLPP, EF_CMI
 
 import pySim.ts_102_221
 
+class NgKSI(BER_TLV_IE, tag=0x80):
+    _construct = Int8ub
+
+class K_AMF(BER_TLV_IE, tag=0x81):
+    _construct = HexAdapter(Bytes(32))
+
+class UplinkNASCount(BER_TLV_IE, tag=0x82):
+    _construct = Int32ub
+
+class DownlinkNASCount(BER_TLV_IE, tag=0x83):
+    _construct = Int32ub
+
+class IdsOfSelectedNasAlgos(BER_TLV_IE, tag=0x84):
+    # 3GPP TS 24.501 Section 9.11.3.34
+    _construct = BitStruct('ciphering'/Nibble, 'integrity'/Nibble)
+
+class IdsOfSelectedEpsAlgos(BER_TLV_IE, tag=0x85):
+    # 3GPP TS 24.301 Section 9.9.3.23
+    _construct = BitStruct('ciphering'/Nibble, 'integrity'/Nibble)
+
+
 # 3GPP TS 31.102 Section 4.4.11.4 (EF_5GS3GPPNSC)
 class EF_5GS3GPPNSC(LinFixedEF):
-    class NgKSI(BER_TLV_IE, tag=0x80):
-        _construct = Int8ub
-
-    class K_AMF(BER_TLV_IE, tag=0x81):
-        _construct = HexAdapter(Bytes(32))
-
-    class UplinkNASCount(BER_TLV_IE, tag=0x82):
-        _construct = Int32ub
-
-    class DownlinkNASCount(BER_TLV_IE, tag=0x83):
-        _construct = Int32ub
-
-    class IdsOfSelectedNasAlgos(BER_TLV_IE, tag=0x84):
-        # 3GPP TS 24.501 Section 9.11.3.34
-        _construct = BitStruct('ciphering'/Nibble, 'integrity'/Nibble)
-
-    class IdsOfSelectedEpsAlgos(BER_TLV_IE, tag=0x85):
-        # 3GPP TS 24.301 Section 9.9.3.23
-        _construct = BitStruct('ciphering'/Nibble, 'integrity'/Nibble)
-
     class FiveGSNasSecurityContext(BER_TLV_IE, tag=0xA0,
             nested=[NgKSI, K_AMF, UplinkNASCount,
                     DownlinkNASCount, IdsOfSelectedNasAlgos,
@@ -323,21 +324,21 @@ class EF_5GS3GPPNSC(LinFixedEF):
         super().__init__(fid, sfid=sfid, name=name, desc=desc, rec_len=rec_len)
         self._tlv = EF_5GS3GPPNSC.FiveGSNasSecurityContext()
 
+class K_AUSF(BER_TLV_IE, tag=0x80):
+    _construct = HexAdapter(GreedyBytes)
+
+class K_SEAF(BER_TLV_IE, tag=0x81):
+    _construct = HexAdapter(GreedyBytes)
+
+class FiveGAuthKeys(TLV_IE_Collection, nested=[K_AUSF, K_SEAF]):
+    pass
+
 # 3GPP TS 31.102 Section 4.4.11.6
 class EF_5GAUTHKEYS(TransparentEF):
-    class K_AUSF(BER_TLV_IE, tag=0x80):
-        _construct = HexAdapter(GreedyBytes)
-
-    class K_SEAF(BER_TLV_IE, tag=0x81):
-        _construct = HexAdapter(GreedyBytes)
-
-    class FiveGAuthKeys(TLV_IE_Collection, nested=[K_AUSF, K_SEAF]):
-        pass
-
     def __init__(self, fid='4f05', sfid=0x05, name='EF.5GAUTHKEYS', size={68, None},
             desc='5G authentication keys'):
         super().__init__(fid, sfid=sfid, name=name, desc=desc, size=size)
-        self._tlv = EF_5GAUTHKEYS.FiveGAuthKeys()
+        self._tlv = FiveGAuthKeys()
 
 # 3GPP TS 31.102 Section 4.4.11.8
 class ProtSchemeIdList(BER_TLV_IE, tag=0xa0):
