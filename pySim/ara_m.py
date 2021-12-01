@@ -337,6 +337,10 @@ class ADF_ARAM(CardADF):
             if res_do:
                 self._cmd.poutput_json(res_do.to_dict())
 
+        def decode_select_response(self, data_hex):
+            print("CAUGHT!")
+            return pySim.ts_51_011.CardProfileSIM.decode_select_response(data_hex)
+
 
 # SEAC v1.1 Section 4.1.2.2 + 5.1.2.2
 sw_aram = {

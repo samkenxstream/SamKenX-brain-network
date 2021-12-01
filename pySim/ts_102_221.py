@@ -675,20 +675,24 @@ class CardProfileUICC(CardProfile):
     @staticmethod
     def decode_select_response(resp_hex:str) -> object:
         """ETSI TS 102 221 Section 11.1.1.3"""
+        print(resp_hex)
         fixup_fcp_proprietary_tlv_map(FCP_Proprietary_TLV_MAP)
         resp_hex = resp_hex.upper()
         # outer layer
         fcp_base_tlv = TLV(['62'])
         fcp_base = fcp_base_tlv.parse(resp_hex)
         # actual FCP
-        fcp_tlv = TLV(FCP_TLV_MAP)
-        fcp = fcp_tlv.parse(fcp_base['62'])
-        # further decode the proprietary information
-        if 'A5' in fcp:
-            prop_tlv = TLV(FCP_Proprietary_TLV_MAP)
-            prop = prop_tlv.parse(fcp['A5'])
-            fcp['A5'] = tlv_val_interpret(FCP_prorietary_interpreter_map, prop)
-            fcp['A5'] = tlv_key_replace(FCP_Proprietary_TLV_MAP, fcp['A5'])
+        if '62' in fcp_base:
+            fcp_tlv = TLV(FCP_TLV_MAP)
+            fcp = fcp_tlv.parse(fcp_base['62'])
+            # further decode the proprietary information
+            if 'A5' in fcp:
+                prop_tlv = TLV(FCP_Proprietary_TLV_MAP)
+                prop = prop_tlv.parse(fcp['A5'])
+                fcp['A5'] = tlv_val_interpret(FCP_prorietary_interpreter_map, prop)
+                fcp['A5'] = tlv_key_replace(FCP_Proprietary_TLV_MAP, fcp['A5'])
+        else:
+            return resp_hex
         # finally make sure we get human-readable keys in the output dict
         r = tlv_val_interpret(FCP_interpreter_map, fcp)
         return tlv_key_replace(FCP_TLV_MAP, r)
