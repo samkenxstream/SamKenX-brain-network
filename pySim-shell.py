@@ -521,6 +521,7 @@ class PySimCommands(CommandSet):
         context['COUNT'] += 1
         df = self._cmd.rs.selected_file
         as_json = opts['JSON']
+        create = opts['CREATE']
 
 	# The currently selected file (not the file we are going to export)
 	# must always be an ADF or DF. From this starting point we select
@@ -550,7 +551,11 @@ class PySimCommands(CommandSet):
 
             for f in df_path_list:
                 self._cmd.poutput("select " + str(f))
-            self._cmd.poutput("select " + self._cmd.rs.selected_file.name)
+
+            if create:
+                self._cmd.poutput("apdu 00E00000%02x%s" % (int(len(self._cmd.rs.selected_file_fcp_hex)/2), str(self._cmd.rs.selected_file_fcp_hex)))
+            else:
+                self._cmd.poutput("select " + self._cmd.rs.selected_file.name)
 
             if structure == 'transparent':
                 if as_json:
@@ -615,22 +620,59 @@ class PySimCommands(CommandSet):
 
         self._cmd.poutput("#")
 
+    def export_df(self, context, opts):
+        """ Export the currently selected dedicated file (DF or ADF) """
+        df = self._cmd.rs.selected_file
+
+        create = opts['CREATE']
+
+	# For consistency, ensure that at the time we call this function the
+	# selected file is a dedicated file.
+        if not isinstance(df, CardDF):
+            raise RuntimeError(
+                "currently selected file %s is not an EF" % str(df))
+
+        # This type of export only makes sense when we intend to add APDUs for
+	# file creation. In the other case the files are already present on the
+	# card, only the contents are updated.
+        if not create:
+            return
+
+        df = self._cmd.rs.selected_file
+        df_path_list = df.fully_qualified_path(True)
+        df_path_list_fid = df.fully_qualified_path(False)
+
+        file_str = '/'.join(df_path_list) + "/"
+        self._cmd.poutput(boxed_heading_str(file_str))
+
+        structure = self._cmd.rs.selected_file_structure()
+        self._cmd.poutput("# RAW FCP Template: %s" % str(self._cmd.rs.selected_file_fcp_hex))
+        self._cmd.poutput("# Decoded FCP Template: %s" % str(self._cmd.rs.selected_file_fcp))
+
+        for f in df_path_list[:-1]:
+            self._cmd.poutput("select " + str(f))
+
+        self._cmd.poutput("apdu 00E00000%02x%s" % (int(len(self._cmd.rs.selected_file_fcp_hex)/2), str(self._cmd.rs.selected_file_fcp_hex)))
+        self._cmd.poutput("#")
+
     export_parser = argparse.ArgumentParser()
     export_parser.add_argument(
         '--filename', type=str, default=None, help='only export specific file')
     export_parser.add_argument(
         '--json', action='store_true', help='export as JSON (less reliable)')
+    export_parser.add_argument(
+        '--create', action='store_true', help='add APDUs for file creation (less reliable')
 
     @cmd2.with_argparser(export_parser)
     def do_export(self, opts):
         """Export files to script that can be imported back later"""
         context = {'ERR': 0, 'COUNT': 0, 'BAD': [],
                    'DF_SKIP': 0, 'DF_SKIP_REASON': []}
-        opts_export = {'JSON': opts.json}
+        opts_export = {'JSON': opts.json, 'CREATE': opts.create}
         if opts.filename:
             self.export_ef(opts.filename, context, opts_export)
         else:
-            self.walk(0, self.export_ef, None, context, opts_export)
+            self.walk(0, self.export_ef, self.export_df, context, opts_export)
 
         self._cmd.poutput(boxed_heading_str("Export summary"))
 
