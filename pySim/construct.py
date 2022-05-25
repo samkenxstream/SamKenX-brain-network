@@ -208,10 +208,11 @@ def GsmString(n):
 
 class GreedyInteger(Construct):
     """A variable-length integer implementation, think of combining GrredyBytes with BytesInteger."""
-    def __init__(self, signed=False, swapped=False):
+    def __init__(self, signed=False, swapped=False, minlen=0):
         super().__init__()
         self.signed = signed
         self.swapped = swapped
+        self.minlen = minlen
 
     def _parse(self, stream, context, path):
         data = stream_read_entire(stream, path)
@@ -239,6 +240,8 @@ class GreedyInteger(Construct):
         if not isinstance(obj, integertypes):
             raise IntegerError(f"value {obj} is not an integer", path=path)
         length = self.__bytes_required(obj)
+        if length < self.minlen:
+            length = length + (self.minlen - length)
         try:
             data = integer2bytes(obj, length, self.signed)
         except ValueError as e:
